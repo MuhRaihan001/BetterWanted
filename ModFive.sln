@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.13.35825.156 d17.13
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ModFive", "ModFive.csproj", "{325269DC-D5C6-4AD2-B891-BEA9F26838ED}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{325269DC-D5C6-4AD2-B891-BEA9F26838ED}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{325269DC-D5C6-4AD2-B891-BEA9F26838ED}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{325269DC-D5C6-4AD2-B891-BEA9F26838ED}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{325269DC-D5C6-4AD2-B891-BEA9F26838ED}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {1E045E04-8AAC-4793-8AC9-135D464FDA49}
+	EndGlobalSection
+EndGlobal
