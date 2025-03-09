@@ -103,7 +103,7 @@ namespace ModFive
                 hunters.Add(hunter);
             }
 
-            Notification.PostTicker("{hunterCount} Bounty hunter(s) are after you!", true);
+            Notification.PostTicker(hunterCount + " Bounty hunter(s) are after you!", true);
         }
 
         private Vehicle CreateHunterVehicle(Vector3 position)
