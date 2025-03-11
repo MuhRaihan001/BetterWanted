@@ -32,6 +32,35 @@ namespace ModFive
             KeyUp += OnKeyUp;
         }
 
+        private bool GangList(int relGroup)
+        {
+            int[] gangGroups = {
+            Function.Call<int>(Hash.GET_HASH_KEY, "AMBIENT_GANG_BALLAS"),
+            Function.Call<int>(Hash.GET_HASH_KEY, "AMBIENT_GANG_FAMILY"),
+            Function.Call<int>(Hash.GET_HASH_KEY, "AMBIENT_GANG_LOST"),
+            Function.Call<int>(Hash.GET_HASH_KEY, "AMBIENT_GANG_MEXICAN"),
+            Function.Call<int>(Hash.GET_HASH_KEY, "AMBIENT_GANG_SALVA"),
+            Function.Call<int>(Hash.GET_HASH_KEY, "AMBIENT_GANG_WEICHENG"),
+            Function.Call<int>(Hash.GET_HASH_KEY, "AMBIENT_GANG_HILLBILLY")
+        };
+
+            foreach (int gang in gangGroups)
+            {
+                if (relGroup == gang)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private bool IsGangMember(Ped npc)
+        {
+            if (!npc.Exists() || npc.IsDead) return false;
+            int group = npc.RelationshipGroup.Hash;
+            return GangList(group);
+        }
+
         private bool IsNpcPolice(Ped npc)
         {
             int group = npc.Exists() ? npc.RelationshipGroup.Hash : -1;
@@ -45,9 +74,53 @@ namespace ModFive
 
         private void OnPlayerKill(Ped victim)
         {
+            if (!victim.Exists() || victim.IsDead) return;
+            if (victim.IsInCombatAgainst(Game.Player.Character)) return;
             if (IsNpcPolice(victim) || IsBountyHunter(victim))
             {
                 GiveBounty(250);
+            }
+        }
+
+
+        private bool RandomChance(int percentage)
+        {
+            return random.Next(0, 100) < percentage;
+        }
+
+
+        private void HandleGangReact(Ped player)
+        {
+            if (player == null || !player.Exists() || player.IsDead) return;
+
+            List<Ped> nearbyGangMembers = World.GetNearbyPeds(player, 50f)
+                .Where(IsGangMember)
+                .ToList();
+
+            foreach (Ped gangMember in nearbyGangMembers)
+            {
+                switch (bounty)
+                {
+                    case >= 10000:
+                        gangMember.Task.Combat(player);
+                        gangMember.PlayAmbientSpeech("GENERIC_CURSE_HIGH", "SPEECH_PARAMS_FORCE_NORMAL");
+                        break;
+
+                    case >= 5000 when RandomChance(50):
+                        gangMember.Task.FollowToOffsetFromEntity(player, new Vector3(1f, 1f, 0f), 5f, -1, 3f, true);
+                        gangMember.PlayAmbientSpeech("GENERIC_HOWS_IT_GOING", "SPEECH_PARAMS_FORCE_NORMAL");
+                        break;
+
+                    case >= 5000:
+                        gangMember.Task.TurnTo(player);
+                        gangMember.Task.StartScenarioInPlace("WORLD_HUMAN_SMOKING", 0);
+                        break;
+
+                    case >= 1000:
+                        gangMember.Task.TurnTo(player);
+                        gangMember.PlayAmbientSpeech("GENERIC_INSULT_HIGH", "SPEECH_PARAMS_FORCE_NORMAL");
+                        break;
+                }
             }
         }
 
@@ -61,6 +134,8 @@ namespace ModFive
             {
                 if(IsNpcPolice(npc))
                     ShowHelpText("Press E to bribe the police");
+                if(IsGangMember(npc))
+                    HandleGangReact(player);
                 HandleNpcReact();
             }
         }
@@ -265,15 +340,12 @@ namespace ModFive
             foreach (Ped ped in allPeds)
             {
                 if (ped.Exists() && ped.IsDead && ped.Killer == player)
-                {
                     OnPlayerKill(ped);
-                }
             }
 
             previousPeds = allPeds.Where(p => p.Exists() && !p.IsDead).ToList();
             previousWanted = currentWantedLevel;
         }
-
 
         private void OnKeyDown(object sender, KeyEventArgs e)
         {
