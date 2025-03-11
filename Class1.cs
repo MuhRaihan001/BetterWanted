@@ -19,6 +19,7 @@ namespace ModFive
         private Random random = new Random();
         private int lastSpawnTime = 0;
         private int lastReactTime = 0;
+        private bool devMode = false;
 
         public WantedSystem()
         {
@@ -26,10 +27,57 @@ namespace ModFive
             previousWanted = 0;
             Tick += OnTick;
             KeyDown += OnKeyDown;
+            KeyUp += OnKeyUp;
+        }
+
+        private bool IsNpcPolice(Ped npc)
+        {
+            int group = npc.Exists() ? npc.RelationshipGroup.Hash : -1;
+            return npc.Exists() && group == Function.Call<int>(Hash.GET_HASH_KEY, "COP");
+        }
+
+        private void HandleNearbyNpc()
+        {
+            Ped player = Game.Player.Character;
+            Ped[] Nearbypeds = World.GetNearbyPeds(player, 2f);
+            if (player.IsInVehicle() || player.IsDead || bounty <= 0) return;
+            foreach (Ped npc in Nearbypeds)
+            {
+                if(IsNpcPolice(npc))
+                    ShowHelpText("Press E to bribe the police");
+                HandleNpcReact();
+            }
+        }
+
+        private void ShowHelpText(string text)
+        {
+            Function.Call(Hash.BEGIN_TEXT_COMMAND_DISPLAY_HELP, "STRING");
+            Function.Call(Hash.ADD_TEXT_COMPONENT_SUBSTRING_PLAYER_NAME, text);
+            Function.Call(Hash.END_TEXT_COMMAND_DISPLAY_HELP, 0, false, true, -1);
+        }
+
+        private void BribePolice()
+        {
+            Ped player = Game.Player.Character;
+            Ped[] Nearbypeds = World.GetNearbyPeds(player, 2f);
+            if (player.IsInVehicle() || player.IsDead || bounty <= 0) return;
+            foreach (Ped npc in Nearbypeds)
+            {
+                if (npc.IsDead || npc.IsPlayer || npc.IsInVehicle()) continue;
+                if (npc.Exists() && IsNpcPolice(npc))
+                {
+                    if (player.Money < bounty) return;
+                    player.Money -= bounty;
+                    GiveBounty(-bounty);
+                    Game.Player.WantedLevel = 0;
+                    Notification.PostTicker("You have bribed the police", false);
+                }
+            }
         }
 
         private void GiveBounty(int amount)
         {
+            if (Game.Player.Character.IsWearingHelmet) return;
             bounty += amount;
             Notification.PostTicker("You have collected a bounty of $" + bounty, false);
         }
@@ -47,23 +95,30 @@ namespace ModFive
         public void HandleNpcReact()
         {
             Ped player = Game.Player.Character;
+            if (player.IsInVehicle() || player.IsDead || bounty <= 5000 || player.IsWearingHelmet) return;
+
             int currentTime = Game.GameTime;
-            if (player.IsInVehicle() || player.IsDead || bounty <= 5000) return;
+            bool canReact = currentTime > lastReactTime + 60000;
 
             foreach (Ped npc in World.GetNearbyPeds(player, 50))
             {
-                if (npc.IsDead || npc.IsPlayer || npc.IsInVehicle() || npc.IsInCombatAgainst(player)) continue;
+                if (npc.IsDead || npc.IsPlayer || npc.IsInVehicle() || npc.IsInCombatAgainst(player) || IsNpcPolice(npc)) continue;
+
                 Function.Call(Hash.PLAY_PED_AMBIENT_SPEECH_NATIVE, npc, "GENERIC_SHOCKED_HIGH", "SPEECH_PARAMS_FORCE");
 
-                if (random.Next(100) < 50 && currentTime > lastReactTime + 60000)
+                if (canReact && random.Next(100) < 50)
                 {
-                    Function.Call(Hash.TASK_USE_MOBILE_PHONE, npc, true);
+                    if (random.Next(100) < 50)
+                        Function.Call(Hash.TASK_USE_MOBILE_PHONE, npc, true);
+                    else
+                        npc.Task.Combat(player);
+
                     Wait(3000);
                     Game.Player.WantedLevel = 1;
                     Notification.PostTicker("The citizen reported you to the police", false);
                     lastReactTime = currentTime;
                 }
-                Function.Call(Hash.TASK_SMART_FLEE_PED, npc, player, 100f, -1, true, true);
+
                 npc.Task.ReactAndFlee(player);
                 npc.RelationshipGroup = Function.Call<int>(Hash.GET_HASH_KEY, "HATES_PLAYER");
             }
@@ -72,13 +127,14 @@ namespace ModFive
         public void SpawnBountyHunter()
         {
             Ped player = Game.Player.Character;
-            int hunterCount = random.Next(1, 5);
+            int hunterCount = random.Next(1, 6);
             Vector3[] spawnOffsets =
             {
                 new Vector3(-10f, -10f, 0f),
                 new Vector3(10f, -10f, 0f),
                 new Vector3(-10f, 10f, 0f),
-                new Vector3(10f, 10f, 0f)
+                new Vector3(10f, 10f, 0f),
+                new Vector3(-10f, 10f, 0f),
             };
 
             List<Ped> hunters = new List<Ped>();
@@ -100,8 +156,19 @@ namespace ModFive
 
         private Vehicle CreateHunterVehicle(Vector3 position)
         {
-            return World.CreateVehicle(new Model(VehicleHash.Ambulance), position + new Vector3(-15f, 15f, 0f));
+            VehicleHash[] suitableVehicles = new VehicleHash[]
+            {
+                VehicleHash.Seminole,    
+                VehicleHash.Granger,     
+                VehicleHash.Minivan,     
+                VehicleHash.Serrano,     
+                VehicleHash.Fugitive     
+            };
+            VehicleHash randomVehicle = suitableVehicles[new Random().Next(suitableVehicles.Length)];
+
+            return World.CreateVehicle(new Model(randomVehicle), position + new Vector3(-15f, 15f, 0f));
         }
+
 
         private Ped CreateHunter(Vector3 spawnPos)
         {
@@ -124,7 +191,14 @@ namespace ModFive
 
         private WeaponHash GetRandomWeapon()
         {
-            WeaponHash[] weapons = { WeaponHash.CarbineRifle, WeaponHash.AssaultRifle, WeaponHash.SMG, WeaponHash.Pistol };
+            WeaponHash[] weapons = { 
+                WeaponHash.CarbineRifle, 
+                WeaponHash.AssaultRifle, 
+                WeaponHash.SMG, 
+                WeaponHash.Pistol, 
+                WeaponHash.APPistol, 
+                WeaponHash.SniperRifle 
+            };
             return weapons[random.Next(weapons.Length)];
         }
 
@@ -135,7 +209,8 @@ namespace ModFive
                 "a_m_m_bevhills_01", "a_m_m_business_01", "a_m_m_farmer_01", "a_m_m_hillbilly_01",
                 "a_m_m_indian_01", "a_m_m_mexcntrn_01", "a_m_m_skater_01", "a_m_m_soucent_01",
                 "a_m_m_tourist_01", "a_m_y_hipster_01", "a_m_y_hiker_01", "a_m_y_skater_01",
-                "a_m_y_vinewood_01", "a_m_y_musclbeac_01", "a_m_y_golfer_01", "a_m_y_soucent_01"
+                "a_m_y_vinewood_01", "a_m_y_musclbeac_01", "a_m_y_golfer_01", "a_m_y_soucent_01",
+                "a_m_y_surfer_01", "a_m_y_vinewood_01", "a_m_y_vinewood_02", "a_m_y_vinewood_03",
             };
             return pedModels[random.Next(pedModels.Length)];
         }
@@ -151,12 +226,9 @@ namespace ModFive
             }
 
             if (Game.Player.Character.IsDead)
-            {
                 OnPlayerDeath();
-            }
-
             if (bounty >= 5000)
-                HandleNpcReact();
+                HandleNearbyNpc();
             if (bounty >= 1000 && random.Next(0, 100) < 5 && currentTime > lastSpawnTime + 60000)
             {
                 SpawnBountyHunter();
@@ -168,17 +240,35 @@ namespace ModFive
 
         private void OnKeyDown(object sender, KeyEventArgs e)
         {
-            switch(e.KeyCode)
+            if(devMode)
             {
-                case Keys.F5:
-                    GiveBounty(1000);
+                switch (e.KeyCode)
+                {
+                    case Keys.F5:
+                        GiveBounty(1000);
+                        break;
+                    case Keys.F6:
+                        bounty = 0;
+                        break;
+                    case Keys.F7:
+                        SpawnBountyHunter();
+                        break;
+                }
+            }
+        }
+
+        private void OnKeyUp(object sender, KeyEventArgs e)
+        {
+            switch (e.KeyCode)
+            {
+                case Keys.Z:
+                    devMode = !devMode;
+                    Notification.PostTicker("Dev mode: " + devMode, false);
                     break;
-                case Keys.F6:
-                    bounty = 0;
+                case Keys.E:
+                    BribePolice();
                     break;
-                case Keys.F7:
-                    SpawnBountyHunter();
-                    break;
+
             }
         }
 
