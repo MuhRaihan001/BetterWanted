@@ -20,6 +20,7 @@ namespace ModFive
         private int lastSpawnTime = 0;
         private int lastReactTime = 0;
         private bool devMode = false;
+        private List<Ped> previousPeds = new List<Ped>();
 
         public WantedSystem()
         {
@@ -35,6 +36,20 @@ namespace ModFive
             int group = npc.Exists() ? npc.RelationshipGroup.Hash : -1;
             return npc.Exists() && group == Function.Call<int>(Hash.GET_HASH_KEY, "COP");
         }
+
+        private bool IsBountyHunter(Ped npc)
+        {
+            return npc.Exists() && npc.RelationshipGroup.Hash == Function.Call<int>(Hash.GET_HASH_KEY, "HATES_PLAYER");
+        }
+
+        private void OnPlayerKill(Ped victim)
+        {
+            if (IsNpcPolice(victim) || IsBountyHunter(victim))
+            {
+                GiveBounty(250);
+            }
+        }
+
 
         private void HandleNearbyNpc()
         {
@@ -219,24 +234,41 @@ namespace ModFive
         {
             int currentTime = Game.GameTime;
             int currentWantedLevel = Game.Player.WantedLevel;
+            Ped player = Game.Player.Character;
+            Ped[] allPeds = World.GetAllPeds();
+
             if (previousWanted > 0 && currentWantedLevel == 0)
             {
-                GiveBounty(previousWanted * 100);
-                Notification.PostTicker("You have collected a bounty of $" + (previousWanted * 100), false);
+                int bountyReward = previousWanted * 100;
+                GiveBounty(bountyReward);
+                Notification.PostTicker($"You have collected a bounty of ${bountyReward}", false);
             }
 
-            if (Game.Player.Character.IsDead)
+            if (player.IsDead)
                 OnPlayerDeath();
+
             if (bounty >= 5000)
                 HandleNearbyNpc();
+
             if (bounty >= 1000 && random.Next(0, 100) < 5 && currentTime > lastSpawnTime + 60000)
             {
                 SpawnBountyHunter();
                 lastSpawnTime = currentTime;
             }
 
+            foreach (Ped ped in allPeds)
+            {
+                if (!ped.Exists() || ped.IsPlayer)
+                    continue;
+
+                if (ped.IsDead && previousPeds.Contains(ped) && ped.Killer == player)
+                    OnPlayerKill(ped);
+            }
+
+            previousPeds = allPeds.Where(p => p.Exists() && !p.IsDead).ToList();
             previousWanted = currentWantedLevel;
         }
+
 
         private void OnKeyDown(object sender, KeyEventArgs e)
         {
