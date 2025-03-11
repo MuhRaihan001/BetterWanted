@@ -19,6 +19,7 @@ namespace ModFive
         private Random random = new Random();
         private int lastSpawnTime = 0;
         private int lastReactTime = 0;
+        private int lastBribeTime = 0;
         private bool devMode = false;
         private List<Ped> previousPeds = new List<Ped>();
 
@@ -74,21 +75,28 @@ namespace ModFive
         private void BribePolice()
         {
             Ped player = Game.Player.Character;
-            Ped[] Nearbypeds = World.GetNearbyPeds(player, 2f);
-            if (player.IsInVehicle() || player.IsDead || bounty <= 0) return;
-            foreach (Ped npc in Nearbypeds)
+            if (player.IsInVehicle() || player.IsDead || bounty <= 0 || Game.GameTime <= lastBribeTime + 300000) return;
+
+            foreach (Ped npc in World.GetNearbyPeds(player, 2f))
             {
-                if (npc.IsDead || npc.IsPlayer || npc.IsInVehicle()) continue;
-                if (npc.Exists() && IsNpcPolice(npc))
+                if (!npc.Exists() || npc.IsDead || npc.IsPlayer || npc.IsInVehicle() || !IsNpcPolice(npc)) continue;
+                if (player.Money < bounty) return;
+                if (random.Next(1, 100) <= 30)
                 {
-                    if (player.Money < bounty) return;
-                    player.Money -= bounty;
-                    GiveBounty(-bounty);
-                    Game.Player.WantedLevel = 0;
-                    Notification.PostTicker("You have bribed the police", false);
+                    Notification.PostTicker("The police refused your bribe", false);
+                    Game.Player.WantedLevel = 1;
+                    return;
                 }
+
+                player.Money -= bounty;
+                GiveBounty(-bounty);
+                Game.Player.WantedLevel = 0;
+                Notification.PostTicker("You have bribed the police", false);
+                lastBribeTime = Game.GameTime;
+                return;
             }
         }
+
 
         private void GiveBounty(int amount)
         {
@@ -235,7 +243,7 @@ namespace ModFive
             int currentTime = Game.GameTime;
             int currentWantedLevel = Game.Player.WantedLevel;
             Ped player = Game.Player.Character;
-            Ped[] allPeds = World.GetAllPeds();
+            Ped[] allPeds = World.GetNearbyPeds(player, 20f); ;
 
             if (previousWanted > 0 && currentWantedLevel == 0)
             {
@@ -250,7 +258,7 @@ namespace ModFive
             if (bounty >= 5000)
                 HandleNearbyNpc();
 
-            if (bounty >= 1000 && random.Next(0, 100) < 5 && currentTime > lastSpawnTime + 60000)
+            if (bounty >= 1000 && random.Next(0, 100) < 5 && currentTime > lastSpawnTime + 300000)
             {
                 SpawnBountyHunter();
                 lastSpawnTime = currentTime;
@@ -258,11 +266,10 @@ namespace ModFive
 
             foreach (Ped ped in allPeds)
             {
-                if (!ped.Exists() || ped.IsPlayer)
-                    continue;
-
-                if (ped.IsDead && previousPeds.Contains(ped) && ped.Killer == player)
+                if (ped.Exists() && ped.IsDead && ped.Killer == player)
+                {
                     OnPlayerKill(ped);
+                }
             }
 
             previousPeds = allPeds.Where(p => p.Exists() && !p.IsDead).ToList();
