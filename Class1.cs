@@ -223,7 +223,7 @@ namespace ModFive
             return weapons[random.Next(weapons.Length)];
         }
 
-        private string GetRandomGangPedModel()
+        private string GetRandomPedModel()
         {
             string[] gangPedModels = new string[]
             {
