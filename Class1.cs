@@ -215,27 +215,25 @@ namespace ModFive
         private WeaponHash GetRandomWeapon()
         {
             WeaponHash[] weapons = { 
-                WeaponHash.CarbineRifle, 
-                WeaponHash.AssaultRifle, 
-                WeaponHash.SMG, 
-                WeaponHash.Pistol, 
-                WeaponHash.APPistol, 
-                WeaponHash.SniperRifle 
+               WeaponHash.Pistol,
+               WeaponHash.Knife,
+               WeaponHash.AssaultShotgun,
+               WeaponHash.MicroSMG
             };
             return weapons[random.Next(weapons.Length)];
         }
 
-        private string GetRandomPedModel()
+        private string GetRandomGangPedModel()
         {
-            string[] pedModels = new string[]
+            string[] gangPedModels = new string[]
             {
-                "a_m_m_bevhills_01", "a_m_m_business_01", "a_m_m_farmer_01", "a_m_m_hillbilly_01",
-                "a_m_m_indian_01", "a_m_m_mexcntrn_01", "a_m_m_skater_01", "a_m_m_soucent_01",
-                "a_m_m_tourist_01", "a_m_y_hipster_01", "a_m_y_hiker_01", "a_m_y_skater_01",
-                "a_m_y_vinewood_01", "a_m_y_musclbeac_01", "a_m_y_golfer_01", "a_m_y_soucent_01",
-                "a_m_y_surfer_01", "a_m_y_vinewood_01", "a_m_y_vinewood_02", "a_m_y_vinewood_03",
+                "g_m_m_armboss_01", "g_m_m_armgoon_01", "g_m_m_armlieut_01", "g_m_m_mexboss_01",
+                "g_m_m_mexboss_02", "g_m_y_ballaeast_01", "g_m_y_ballaorig_01", "g_m_y_ballasout_01",
+                "g_m_y_famca_01", "g_m_y_famdnf_01", "g_m_y_famfor_01", "g_m_y_lost_01",
+                "g_m_y_lost_02", "g_m_y_lost_03", "g_m_y_mexgang_01", "g_m_y_mexgoon_01",
+                "g_m_y_mexgoon_02", "g_m_y_mexgoon_03", "g_m_y_pologoon_01", "g_m_y_pologoon_02"
             };
-            return pedModels[random.Next(pedModels.Length)];
+            return gangPedModels[random.Next(gangPedModels.Length)];
         }
 
         private void OnTick(object sender, EventArgs e)
