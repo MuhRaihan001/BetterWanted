@@ -15,13 +15,21 @@ namespace ModFive
     public class WantedSystem : Script
     {
         int previousWanted = 0;
-        public int bounty = 0;
+        //public int bounty = 0;
         private Random random = new Random();
         private int lastSpawnTime = 0;
         private int lastReactTime = 0;
         private int lastBribeTime = 0;
         private bool devMode = false;
+        private List<Ped> hunters = new List<Ped>();
         private List<Ped> previousPeds = new List<Ped>();
+
+        private Dictionary<PedHash, int> characterBounties = new Dictionary<PedHash, int>
+        {
+            { PedHash.Franklin, 0 },
+            { PedHash.Michael, 0 },
+            { PedHash.Trevor, 0 }
+        };
 
         public WantedSystem()
         {
@@ -32,9 +40,18 @@ namespace ModFive
             KeyUp += OnKeyUp;
         }
 
-        private bool GangList(int relGroup)
+        private PedHash GetCurrentCharacter()
         {
-            int[] gangGroups = {
+            Ped player = Game.Player.Character;
+            if (player.Model == PedHash.Franklin) return PedHash.Franklin;
+            if (player.Model == PedHash.Michael) return PedHash.Michael;
+            if (player.Model == PedHash.Trevor) return PedHash.Trevor;
+            return PedHash.Franklin;
+        }
+
+
+        private static readonly int[] gangGroups =
+        {
             Function.Call<int>(Hash.GET_HASH_KEY, "AMBIENT_GANG_BALLAS"),
             Function.Call<int>(Hash.GET_HASH_KEY, "AMBIENT_GANG_FAMILY"),
             Function.Call<int>(Hash.GET_HASH_KEY, "AMBIENT_GANG_LOST"),
@@ -44,89 +61,78 @@ namespace ModFive
             Function.Call<int>(Hash.GET_HASH_KEY, "AMBIENT_GANG_HILLBILLY")
         };
 
-            foreach (int gang in gangGroups)
-            {
-                if (relGroup == gang)
-                {
-                    return true;
-                }
-            }
-            return false;
-        }
-
-        private bool IsGangMember(Ped npc)
-        {
-            if (!npc.Exists() || npc.IsDead) return false;
-            int group = npc.RelationshipGroup.Hash;
-            return GangList(group);
-        }
-
-        private bool IsNpcPolice(Ped npc)
-        {
-            int group = npc.Exists() ? npc.RelationshipGroup.Hash : -1;
-            return npc.Exists() && group == Function.Call<int>(Hash.GET_HASH_KEY, "COP");
-        }
-
-        private bool IsBountyHunter(Ped npc)
-        {
-            return npc.Exists() && npc.RelationshipGroup.Hash == Function.Call<int>(Hash.GET_HASH_KEY, "HATES_PLAYER");
-        }
+        private bool IsGangMember(Ped npc) => npc.Exists() && !npc.IsDead && gangGroups.Contains(npc.RelationshipGroup.Hash);
+        private bool IsNpcPolice(Ped npc) => npc.Exists() && npc.RelationshipGroup.Hash == Function.Call<int>(Hash.GET_HASH_KEY, "COP");
+        private bool IsBountyHunter(Ped npc) => npc.Exists() && hunters.Contains(npc);
+        private bool RandomChance(int percentage) => random.Next(0, 100) < percentage;
 
         private void OnPlayerKill(Ped victim)
         {
-            if (!victim.Exists() || victim.IsDead) return;
-            if (victim.IsInCombatAgainst(Game.Player.Character)) return;
+            if (!victim.Exists()) return;
             if (IsNpcPolice(victim) || IsBountyHunter(victim))
             {
                 GiveBounty(250);
             }
         }
 
-
-        private bool RandomChance(int percentage)
-        {
-            return random.Next(0, 100) < percentage;
-        }
-
-
         private void HandleGangReact(Ped player)
         {
+            int bounty = characterBounties[GetCurrentCharacter()];
             if (player == null || !player.Exists() || player.IsDead) return;
-
             List<Ped> nearbyGangMembers = World.GetNearbyPeds(player, 50f)
                 .Where(IsGangMember)
                 .ToList();
 
             foreach (Ped gangMember in nearbyGangMembers)
             {
-                switch (bounty)
+                if (bounty >= 10000)
                 {
-                    case >= 10000:
-                        gangMember.Task.Combat(player);
-                        gangMember.PlayAmbientSpeech("GENERIC_CURSE_HIGH", "SPEECH_PARAMS_FORCE_NORMAL");
-                        break;
+                    gangMember.Task.ClearAllImmediately();
+                    gangMember.Task.Combat(player);
+                    gangMember.PlayAmbientSpeech("GENERIC_CURSE_HIGH", "SPEECH_PARAMS_FORCE_NORMAL");
+                    continue;
+                }
 
-                    case >= 5000 when RandomChance(50):
+                if (bounty >= 5000)
+                {
+                    if (RandomChance(50))
+                    {
+                        gangMember.Task.ClearAllImmediately();
                         gangMember.Task.FollowToOffsetFromEntity(player, new Vector3(1f, 1f, 0f), 5f, -1, 3f, true);
                         gangMember.PlayAmbientSpeech("GENERIC_HOWS_IT_GOING", "SPEECH_PARAMS_FORCE_NORMAL");
-                        break;
-
-                    case >= 5000:
+                    }
+                    else
+                    {
+                        gangMember.Task.ClearAllImmediately();
                         gangMember.Task.TurnTo(player);
                         gangMember.Task.StartScenarioInPlace("WORLD_HUMAN_SMOKING", 0);
-                        break;
+                    }
+                    continue;
+                }
 
-                    case >= 1000:
-                        gangMember.Task.TurnTo(player);
-                        gangMember.PlayAmbientSpeech("GENERIC_INSULT_HIGH", "SPEECH_PARAMS_FORCE_NORMAL");
-                        break;
+                if (bounty >= 1000)
+                {
+                    gangMember.Task.ClearAllImmediately();
+                    gangMember.Task.TurnTo(player);
+                    gangMember.PlayAmbientSpeech("GENERIC_INSULT_HIGH", "SPEECH_PARAMS_FORCE_NORMAL");
                 }
             }
         }
 
+        private void handleSpy(Ped spy)
+        {
+            Ped player = Game.Player.Character;
+            if (!spy.Exists() || spy.IsDead) return;
+            spy.Weapons.Give(GetRandomWeapon(), 100, true, true);
+            spy.Health = 250;
+            spy.Armor = 250;
+            spy.Task.Combat(player);
+            spy.PlayAmbientSpeech("GENERIC_INSULT_HIGH", "SPEECH_PARAMS_FORCE_NORMAL");
+        }
 
         private void HandleNearbyNpc()
         {
+            int bounty = characterBounties[GetCurrentCharacter()];
             Ped player = Game.Player.Character;
             Ped[] Nearbypeds = World.GetNearbyPeds(player, 2f);
             if (player.IsInVehicle() || player.IsDead || bounty <= 0) return;
@@ -136,6 +142,8 @@ namespace ModFive
                     ShowHelpText("Press E to bribe the police");
                 if(IsGangMember(npc))
                     HandleGangReact(player);
+                if (random.Next(100) < 25)
+                    handleSpy(npc);
                 HandleNpcReact();
             }
         }
@@ -149,12 +157,13 @@ namespace ModFive
 
         private void BribePolice()
         {
+            int bounty = characterBounties[GetCurrentCharacter()];
             Ped player = Game.Player.Character;
             if (player.IsInVehicle() || player.IsDead || bounty <= 0 || Game.GameTime <= lastBribeTime + 300000) return;
 
             foreach (Ped npc in World.GetNearbyPeds(player, 2f))
             {
-                if (!npc.Exists() || npc.IsDead || npc.IsPlayer || npc.IsInVehicle() || !IsNpcPolice(npc)) continue;
+                if (npc.IsPlayer || npc.IsInVehicle() || !IsNpcPolice(npc)) continue;
                 if (player.Money < bounty) return;
                 if (random.Next(1, 100) <= 30)
                 {
@@ -175,13 +184,15 @@ namespace ModFive
 
         private void GiveBounty(int amount)
         {
-            if (Game.Player.Character.IsWearingHelmet) return;
-            bounty += amount;
-            Notification.PostTicker("You have collected a bounty of $" + bounty, false);
+            PedHash currentCharacter = GetCurrentCharacter();
+            characterBounties[currentCharacter] += amount;
+            int newBounty = characterBounties[currentCharacter];
+            Notification.PostTicker($"Bounty for {currentCharacter}: ${newBounty}", false);
         }
 
         public void OnPlayerDeath()
         {
+            int bounty = characterBounties[GetCurrentCharacter()];
             if (bounty > 0)
             {
                 GiveBounty(-bounty);
@@ -192,6 +203,7 @@ namespace ModFive
 
         public void HandleNpcReact()
         {
+            int bounty = characterBounties[GetCurrentCharacter()];
             Ped player = Game.Player.Character;
             if (player.IsInVehicle() || player.IsDead || bounty <= 5000 || player.IsWearingHelmet) return;
 
@@ -203,7 +215,7 @@ namespace ModFive
                 if (npc.IsDead || npc.IsPlayer || npc.IsInVehicle() || npc.IsInCombatAgainst(player) || IsNpcPolice(npc)) continue;
 
                 Function.Call(Hash.PLAY_PED_AMBIENT_SPEECH_NATIVE, npc, "GENERIC_SHOCKED_HIGH", "SPEECH_PARAMS_FORCE");
-
+                npc.Task.ClearAllImmediately();
                 if (canReact && random.Next(100) < 50)
                 {
                     if (random.Next(100) < 50)
@@ -235,7 +247,6 @@ namespace ModFive
                 new Vector3(-10f, 10f, 0f),
             };
 
-            List<Ped> hunters = new List<Ped>();
             Vehicle hunterVehicle = hunterCount > 2 ? CreateHunterVehicle(player.Position) : null;
 
             for (int i = 0; i < hunterCount; i++)
@@ -285,6 +296,8 @@ namespace ModFive
         private void AssignHunterToVehicle(Ped hunter, Vehicle vehicle, int index)
         {
             hunter.SetIntoVehicle(vehicle, index == 0 ? VehicleSeat.Driver : (VehicleSeat)(index - 1));
+            if (index == 0)
+                hunter.Task.CruiseWithVehicle(vehicle, 20f, VehicleDrivingFlags.AllowGoingWrongWay);
         }
 
         private WeaponHash GetRandomWeapon()
@@ -313,6 +326,7 @@ namespace ModFive
 
         private void OnTick(object sender, EventArgs e)
         {
+            int bounty = characterBounties[GetCurrentCharacter()];
             int currentTime = Game.GameTime;
             int currentWantedLevel = Game.Player.WantedLevel;
             Ped player = Game.Player.Character;
@@ -349,7 +363,8 @@ namespace ModFive
 
         private void OnKeyDown(object sender, KeyEventArgs e)
         {
-            if(devMode)
+            int bounty = characterBounties[GetCurrentCharacter()];
+            if (devMode)
             {
                 switch (e.KeyCode)
                 {
